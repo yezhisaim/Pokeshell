@@ -1,14 +1,17 @@
 import * as Y from 'yjs'
 
-import { POKEMON, type Member, type Mission } from '../data'
+import { POKEMON, SESSION_CODE, type Member, type Mission } from '../data'
 
 /**
  * Mission Room collaboration layer.
  *
  * The shared document lives in a Y.Doc that is never persisted: no
- * localStorage, no IndexedDB, no server. Tabs of the same mission find each
- * other over a BroadcastChannel namespaced by mission id and exchange CRDT
- * updates, so concurrent edits merge instead of overwriting each other.
+ * localStorage, no IndexedDB, no database. Peers of the same mission exchange
+ * CRDT updates over two transports at once: a BroadcastChannel for tabs in the
+ * same browser, and the dev server's in-memory relay (SSE + POST, see
+ * relay-plugin.ts) for other machines. Both carry the same envelopes and every
+ * handler is idempotent, so hearing a message twice is harmless and concurrent
+ * edits merge instead of overwriting each other.
  */
 
 const PROTOCOL = 'pokeshell:mission'
@@ -19,7 +22,9 @@ const CURSOR_TTL_MS = 5000
 const SWEEP_MS = 1000
 const TEARDOWN_DELAY_MS = 60
 const SYNC_ASK_RETRY_MS = 900
-const SEED_WAIT_MS = 220
+const SEED_WAIT_MS = 500
+const RELAY_WAIT_MS = 1200
+const RELAY_QUEUE_MAX = 200
 const SEED_CLAIM_WAIT_MS = 150
 
 /** Kept in sync with `.mr-doc` / `.mr-ln` line-height in mission-room.css. */
@@ -108,6 +113,92 @@ type Envelope =
   | { t: 'bye'; from: string }
 
 type PeerRecord = Peer & { editingAt: number }
+
+/* ------------------------------------------------------------------ *
+ * Relay link: Server-Sent Events down, POST up. Uint8Array fields (Yjs
+ * updates) travel as base64 inside JSON.
+ * ------------------------------------------------------------------ */
+
+function toBase64(bytes: Uint8Array): string {
+  let out = ''
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    out += String.fromCharCode(...bytes.subarray(i, i + 0x8000))
+  }
+  return btoa(out)
+}
+
+function fromBase64(text: string): Uint8Array {
+  const raw = atob(text)
+  const bytes = new Uint8Array(raw.length)
+  for (let i = 0; i < raw.length; i++) bytes[i] = raw.charCodeAt(i)
+  return bytes
+}
+
+const encodeEnvelope = (message: Envelope) =>
+  JSON.stringify(message, (_key, value) =>
+    value instanceof Uint8Array ? { __u8: toBase64(value) } : value,
+  )
+
+const decodeEnvelope = (text: string): Envelope =>
+  JSON.parse(text, (_key, value) =>
+    value && typeof value === 'object' && typeof value.__u8 === 'string'
+      ? fromBase64(value.__u8)
+      : value,
+  )
+
+class RelayLink {
+  onmessage: (message: Envelope) => void = () => {}
+  onopen: () => void = () => {}
+
+  private readonly source: EventSource
+  private readonly sendUrl: string
+  private open = false
+  private queue: string[] = []
+
+  constructor(room: string) {
+    const q = encodeURIComponent(room)
+    this.sendUrl = `/relay/send?room=${q}`
+    this.source = new EventSource(`/relay/events?room=${q}`)
+    this.source.onopen = () => {
+      this.open = true
+      const pending = this.queue
+      this.queue = []
+      for (const body of pending) this.push(body)
+      this.onopen()
+    }
+    this.source.onerror = () => {
+      this.open = false
+    }
+    this.source.onmessage = (event: MessageEvent<string>) => {
+      try {
+        this.onmessage(decodeEnvelope(event.data))
+      } catch {
+        /* malformed frame */
+      }
+    }
+  }
+
+  post(message: Envelope) {
+    const body = encodeEnvelope(message)
+    if (this.open) this.push(body)
+    else if (this.queue.length < RELAY_QUEUE_MAX) this.queue.push(body)
+  }
+
+  private push(body: string) {
+    fetch(this.sendUrl, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      keepalive: true,
+    }).catch(() => {
+      /* relay unreachable; the browser's EventSource retries the stream */
+    })
+  }
+
+  close() {
+    this.source.close()
+  }
+}
 
 /* ------------------------------------------------------------------ *
  * Minimal text diff. Every local edit becomes one contiguous insert or
@@ -268,6 +359,7 @@ class MissionRoomImpl implements MissionRoom {
   private readonly doc = new Y.Doc()
   private readonly ytext: Y.Text
   private readonly channel: BroadcastChannel | null
+  private readonly relay: RelayLink | null
   private readonly listeners = new Set<() => void>()
   private readonly peers = new Map<string, PeerRecord>()
   private readonly cursors = new Map<string, RemoteCursor>()
@@ -282,6 +374,7 @@ class MissionRoomImpl implements MissionRoom {
   private seq = 0
   private pingTick = 0
   private seedBlocked = false
+  private connected = false
   private cursorPending: number | null = null
   private cursorFrame: number | null = null
   private sweepTimer: ReturnType<typeof setInterval> | null = null
@@ -308,9 +401,29 @@ class MissionRoomImpl implements MissionRoom {
       this.bump()
     })
 
-    if (this.channel) {
-      this.channel.onmessage = (event: MessageEvent<Envelope>) => this.handle(event.data)
-      this.connect()
+    this.relay =
+      typeof EventSource === 'undefined'
+        ? null
+        : new RelayLink(`${SESSION_CODE}:${roomChannel(mission.id)}`)
+
+    if (this.channel || this.relay) {
+      if (this.channel) this.channel.onmessage = (event: MessageEvent<Envelope>) => this.handle(event.data)
+      if (this.relay) {
+        this.relay.onmessage = this.handle
+        // First open starts the handshake; later opens are reconnects and
+        // just re-sync, since updates sent while the stream was down are lost.
+        this.relay.onopen = () => {
+          if (!this.connected) this.connectOnce()
+          else {
+            this.post({ t: 'sync-ask', from: this.tabId })
+            this.postPresence()
+          }
+        }
+        // Without a relay (static hosting) fall back to same-browser tabs only.
+        this.after(RELAY_WAIT_MS, () => this.connectOnce())
+      } else {
+        this.connectOnce()
+      }
       this.sweepTimer = setInterval(() => this.sweep(), SWEEP_MS)
       if (typeof window !== 'undefined') {
         window.addEventListener('pagehide', this.onPageHide)
@@ -323,6 +436,12 @@ class MissionRoomImpl implements MissionRoom {
   }
 
   private onPageHide = () => this.destroy()
+
+  private connectOnce() {
+    if (this.connected || this.destroyed) return
+    this.connected = true
+    this.connect()
+  }
 
   isDestroyed = () => this.destroyed
 
@@ -380,6 +499,7 @@ class MissionRoomImpl implements MissionRoom {
   /* ---------------- protocol ---------------- */
 
   private post = (message: Envelope) => {
+    this.relay?.post(message)
     if (!this.channel) return
     try {
       this.channel.postMessage(message)
@@ -571,7 +691,7 @@ class MissionRoomImpl implements MissionRoom {
   }
 
   reportCursor = (index: number) => {
-    if (this.destroyed || !this.channel) return
+    if (this.destroyed || (!this.channel && !this.relay)) return
     this.cursorPending = index
     if (this.cursorFrame !== null) return
     this.cursorFrame = requestAnimationFrame(() => {
@@ -674,6 +794,7 @@ class MissionRoomImpl implements MissionRoom {
     this.timers.length = 0
     if (typeof window !== 'undefined') window.removeEventListener('pagehide', this.onPageHide)
     this.channel?.close()
+    this.relay?.close()
     this.doc.destroy()
     this.listeners.clear()
   }
