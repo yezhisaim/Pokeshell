@@ -90,20 +90,21 @@ export default function App() {
   }, [encounter])
 
   const onJoin = useCallback((name: string) => {
-    setTeam((t) => {
-      if (t.some((m) => m.name.toLowerCase() === name.toLowerCase())) return t
-      return [
-        ...t,
-        {
-          id: slug(name) || `guest-${t.length}`,
-          name,
-          handle: `@${slug(name) || 'guest'}`,
-          emoji: name.trim().charAt(0).toUpperCase(),
-          color: JOIN_COLORS[t.length % JOIN_COLORS.length],
-          role: 'Collaborator',
-        },
-      ]
-    })
+    // The joiner becomes "me" on this machine. The id carries a random suffix so
+    // two people who type the same name stay distinct in the shared room.
+    const id = `${slug(name) || 'guest'}-${Math.random().toString(36).slice(2, 6)}`
+    setTeam((t) => [
+      ...t.map((m) => (m.isMe ? { ...m, isMe: false } : m)),
+      {
+        id,
+        name,
+        handle: `@${slug(name) || 'guest'}`,
+        emoji: name.trim().charAt(0).toUpperCase(),
+        color: JOIN_COLORS[t.length % JOIN_COLORS.length],
+        role: 'Collaborator',
+        isMe: true,
+      },
+    ])
     setJoining(false)
   }, [])
 
