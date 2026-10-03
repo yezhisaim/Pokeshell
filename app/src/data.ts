@@ -137,7 +137,10 @@ export const ME: Member = {
 }
 
 /** Static invite code for this session. Anyone with it can join the team. */
-export const SESSION_CODE = 'POKEBALL-42'
+export const SESSION_CODE = '123456789'
+
+/** Missions included on the free plan. Everything past this needs a paid plan. */
+export const FREE_MISSION_LIMIT = 5
 
 export const JOIN_COLORS = [
   '#5eb3ff',
@@ -376,6 +379,60 @@ export const MISSIONS: Mission[] = [
       { id: 's1', label: 'Capture the baseline', done: false },
       { id: 's2', label: 'Add the index', done: false },
       { id: 's3', label: 'Re-measure', done: false },
+    ],
+  },
+]
+
+export const PREMIUM_MISSIONS: Mission[] = [
+  {
+    id: 'm-graph',
+    title: 'Index the Activity Graph',
+    desc: 'The team feed walks the whole event log. Build the traversal index and measure the win.',
+    difficulty: 'Hard',
+    xp: 340,
+    file: 'src/data/graph.ts',
+    branch: 'perf/graph-index',
+    rewardPokemon: 'gyarados',
+    status: 'locked',
+    tags: ['performance', 'data'],
+    steps: [
+      { id: 's1', label: 'Capture the baseline', done: false },
+      { id: 's2', label: 'Build the traversal index', done: false },
+      { id: 's3', label: 'Re-measure and compare', done: false },
+    ],
+  },
+  {
+    id: 'm-rbac',
+    title: 'Scope Sessions by Membership',
+    desc: 'Row-level access so one session can never read another session rows.',
+    difficulty: 'Hard',
+    xp: 380,
+    file: 'src/auth/rls.ts',
+    branch: 'feat/session-rls',
+    rewardPokemon: 'mewtwo',
+    status: 'locked',
+    tags: ['security', 'backend'],
+    steps: [
+      { id: 's1', label: 'Write the membership policy', done: false },
+      { id: 's2', label: 'Add the cross-session test', done: false },
+      { id: 's3', label: 'Verify the denial path', done: false },
+    ],
+  },
+  {
+    id: 'm-observability',
+    title: 'Trace the Agent Session',
+    desc: 'One trace per agent turn, with tool-call spans, so a slow reply is explainable.',
+    difficulty: 'Medium',
+    xp: 220,
+    file: 'src/agent/telemetry.ts',
+    branch: 'feat/agent-traces',
+    rewardPokemon: 'snorlax',
+    status: 'locked',
+    tags: ['observability', 'agent'],
+    steps: [
+      { id: 's1', label: 'Instrument the run loop', done: false },
+      { id: 's2', label: 'Emit tool spans', done: false },
+      { id: 's3', label: 'Check a trace end to end', done: false },
     ],
   },
 ]

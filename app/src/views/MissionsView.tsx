@@ -1,5 +1,7 @@
 import { POKEMON, type Mission } from '../data'
 import { Icon, PokeArt } from '../components/ui'
+import { PaywallGate } from '../components/PaywallGate'
+import { PlanBadge } from '../components/PlanBadge'
 
 const STATUS_CHIP: Record<Mission['status'], { cls: string; label: string }> = {
   active: { cls: 'amber', label: 'active' },
@@ -43,6 +45,7 @@ function MissionCard({
 
       <div className="meta">
         <span className={`chip ${status.cls}`}>{status.label}</span>
+        <PlanBadge missionId={mission.id} />
         <span className="chip">{mission.difficulty}</span>
         <span className="chip amber">{mission.xp} xp</span>
         {mission.tags.map((t) => (
@@ -117,7 +120,9 @@ export function MissionsView({
 
       <div className="grid cols-3">
         {missions.map((m) => (
-          <MissionCard key={m.id} mission={m} onPick={onPick} onShip={onShip} />
+          <PaywallGate key={m.id} mission={m}>
+            <MissionCard mission={m} onPick={onPick} onShip={onShip} />
+          </PaywallGate>
         ))}
       </div>
     </>

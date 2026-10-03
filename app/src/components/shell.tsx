@@ -72,6 +72,7 @@ export function Topbar({
 export type View =
   | 'home'
   | 'missions'
+  | 'mission'
   | 'plan'
   | 'handoff'
   | 'agent'

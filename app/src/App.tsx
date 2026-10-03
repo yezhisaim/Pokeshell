@@ -11,6 +11,7 @@ import {
   type PullRequest,
 } from './data'
 import { Sidebar, Topbar, type View } from './components/shell'
+import { MISSION_CATALOG } from './billing/plans'
 import { EncounterModal, Onboard } from './components/modals'
 import { JoinModal } from './components/JoinModal'
 import { HomeView } from './views/HomeView'
@@ -21,6 +22,7 @@ import { ReviewView } from './views/ReviewView'
 import { PokedexView, type Capture } from './views/PokedexView'
 import { LeaderboardView } from './views/LeaderboardView'
 import { AgentSession } from './views/AgentSession'
+import { MissionRoomView } from './views/MissionRoomView'
 import { useSimulatedSession } from './sim/useSimulatedSession'
 
 type Encounter = { pokemon: string; mission: string } | null
@@ -55,7 +57,7 @@ export default function App() {
       })),
     )
     setActiveMission(m)
-    setView('plan')
+    setView('mission')
   }, [])
 
   const onShip = useCallback((m: Mission) => {
@@ -126,6 +128,13 @@ export default function App() {
 
   const sim = useSimulatedSession(team)
 
+  // Free missions keep their live status; premium ones are appended from the
+  // catalog and stay locked until an entitlement says otherwise.
+  const allMissions = useMemo(() => {
+    const live = new Map(missions.map((m) => [m.id, m]))
+    return MISSION_CATALOG.map((m) => live.get(m.id) ?? { ...m, status: 'locked' as const })
+  }, [missions])
+
   const availableMissions = useMemo(
     () => missions.filter((m) => m.status === 'available').length,
     [missions],
@@ -169,7 +178,15 @@ export default function App() {
         )}
 
         {view === 'missions' && (
-          <MissionsView missions={missions} onPick={onPickMission} onShip={onShip} />
+          <MissionsView missions={allMissions} onPick={onPickMission} onShip={onShip} />
+        )}
+
+        {view === 'mission' && (
+          <MissionRoomView
+            mission={activeMission}
+            team={team}
+            onLeave={() => setView('missions')}
+          />
         )}
 
         {view === 'plan' && <PlanView />}
