@@ -27,6 +27,7 @@ Sources: [form-factor.md](/workspace/docs/form-factor.md?projectId=d410f21c-f242
 | Edit code | Lets users edit code while working with the team’s shared development context. | The editing interaction, concurrency behavior, and change-history behavior are not specified. |
 | Inspect ownership and overlap | Makes active ownership and overlapping code changes available for coordination. | The presentation, assignment behavior, and conflict-resolution behavior are not specified. |
 | Connect execution to verification | Connects execution activity with plans, tests, and deployment checks. | The interaction that creates, updates, or removes these connections is not specified. |
+| Maintain flow state | Monitors task difficulty against skill level to keep work in the flow channel, suggests breaks and step adjustments when needed. | Flow band thresholds, pacing intervals, and non-intrusive intervention triggers are not specified. |
 | Review shared context | Supports assessment of code activity, plans, tests, deployment checks, and unresolved risks. | The review controls, evidence format, and criteria for a complete review are not specified. |
 Sources: [PRD.md](/workspace/docs/PRD.md?projectId=d410f21c-f242-45e8-97d4-8c58c8d3f3b0&version=1) [form-factor.md](/workspace/docs/form-factor.md?projectId=d410f21c-f242-45e8-97d4-8c58c8d3f3b0&version=1)
 ## Empty, loading, and error states
@@ -40,5 +41,8 @@ Open question: How should the feature report unavailable repository context, fai
 Sources: [OPEN-DECISIONS.md](/workspace/docs/OPEN-DECISIONS.md?projectId=d410f21c-f242-45e8-97d4-8c58c8d3f3b0&version=3) [form-factor.md](/workspace/docs/form-factor.md?projectId=d410f21c-f242-45e8-97d4-8c58c8d3f3b0&version=1)
 ## What success looks like
 Success means engineering teams can develop together in live sessions, hand off work with shared context, coordinate overlapping code changes, and review progress from shared development context. For a handoff, the receiving developer should be able to resume work without missing-context clarification when the active plan, task context, changed files, application state, and next step are captured together. For review, the reviewer should be able to identify missing evidence without reconstructing context from separate sources.
+
+Additionally, the system maintains teams in an optimal flow state by minimizing context switching, providing appropriate pacing, and surfacing guidance only when needed to keep work in the flow channel.
+
 The recorded project target is one paying person within one year, with the current value recorded as zero. No feature-specific completion, adoption, or quality metric is defined.
 Sources: [PRD.md](/workspace/docs/PRD.md?projectId=d410f21c-f242-45e8-97d4-8c58c8d3f3b0&version=1) [soul.md](/workspace/docs/soul.md?projectId=d410f21c-f242-45e8-97d4-8c58c8d3f3b0&version=1)
