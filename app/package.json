@@ -4,10 +4,14 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "node server/relay.mjs & vite",
     "build": "tsc -b && vite build",
     "lint": "oxlint",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "relay": "node server/relay.mjs",
+    "dev:vite": "vite",
+    "smoke": "node scripts/smoke.mjs",
+    "verify:mission-room": "node scripts/verify-mission-room.mjs"
   },
   "dependencies": {
     "@assistant-ui/react": "^0.15.23",
@@ -20,6 +24,7 @@
     "react-dom": "^19.2.8",
     "tailwind-merge": "^3.7.0",
     "tailwindcss": "^4.3.3",
+    "ws": "^8.22.0",
     "yjs": "^13.6.33",
     "zustand": "^5.0.15"
   },
